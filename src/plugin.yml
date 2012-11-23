@@ -1,0 +1,18 @@
+##  Plugin Information  ##
+name: UsefulTNT
+version: 0.1
+main: syam.UsefulTNT.UsefulTNT
+description: UsefulTNT for SakuraServer
+website: http://sakura-server.net/
+depend: [HawkEye, WorldGuard]
+##  Original Author     ##
+author: syam
+#commands:
+#    usefultnt:
+#      usage: /usefultnt help - to see the help
+#      aliases: [utnt]
+#      description: To see the UsefulTNT help.
+permissions:
+    usefultnt.admin:
+        default: op
+        description: All permissions of UsefulTNT.
