@@ -91,12 +91,15 @@ public class Actions {
 		int i = 0;
 		for (Player player : Bukkit.getServer().getOnlinePlayers()){
 			if (player.hasPermission(permission)){
-				Actions.message(null, player, message);
+				Actions.message( null, player, message);
 				i++;
 			}
 		}
 
-		log.info("Received "+i+"players: "+message);
+		if( message != null ){
+			message = message.replaceAll("&([0-9a-fk-or])", "");
+			log.info( logPrefix + "Received "+i+" players: "+message);
+		}
 	}
 
 	/****************************************/

@@ -7,10 +7,10 @@ import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import com.sk89q.worldguard.bukkit.WorldGuardPlugin;
-
 import uk.co.oliwali.HawkEye.entry.DataEntry;
 import uk.co.oliwali.HawkEye.util.HawkEyeAPI;
+
+import com.sk89q.worldguard.bukkit.WorldGuardPlugin;
 
 public class UsefulTNT extends JavaPlugin {
 	// Logger
@@ -45,8 +45,8 @@ public class UsefulTNT extends JavaPlugin {
 		Plugin p = pm.getPlugin("HawkEye");
 		if (p == null){
 			log.warning(logPrefix+"Cannot find HawkEye! Disabling plugin.");
-			getPluginLoader().disablePlugin(this);
-			return;
+			//getPluginLoader().disablePlugin(this);
+			//return;
 		}else{
 			usingHawkEye = true; // フラグ
 			log.info(logPrefix+"Hooked to Hawkeye!");

@@ -1,7 +1,8 @@
 package syam.UsefulTNT;
 
-import static com.sk89q.worldguard.bukkit.BukkitUtil.toVector;
+import static com.sk89q.worldguard.bukkit.BukkitUtil.*;
 
+import java.util.HashMap;
 import java.util.logging.Logger;
 
 import org.bukkit.Effect;
@@ -19,12 +20,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.inventory.ItemStack;
 
 import syam.UsefulTNT.PrimedTNTManager.PrimedTNT;
-import uk.co.oliwali.HawkEye.DataType;
-import uk.co.oliwali.HawkEye.entry.BlockEntry;
-import uk.co.oliwali.HawkEye.util.HawkEyeAPI;
 
 import com.sk89q.worldguard.LocalPlayer;
 import com.sk89q.worldguard.protection.ApplicableRegionSet;
@@ -37,6 +34,7 @@ public class TNTListener implements Listener{
 	private final static String msgPrefix = UsefulTNT.msgPrefix;
 
 	private final UsefulTNT plugin;
+	private final HashMap<Material,Integer> enhancer = PrimedTNTManager.enhancer;
 
 	public TNTListener(UsefulTNT plugin){
 		this.plugin = plugin;
@@ -47,7 +45,7 @@ public class TNTListener implements Listener{
 	/**
 	 * TODO:
 	 * 今の方法では、TNT起爆時に真下が空気だとTNTが落下するが、特殊な爆発は起爆時のTNT座標が元になる問題がある
-	 *
+	 * bob_puyon:メソッド別のコストの修正が必要になる
 	 */
 
 	/**
@@ -72,39 +70,74 @@ public class TNTListener implements Listener{
 			if (block.getWorld().getEnvironment() == Environment.THE_END)
 				return;
 
-			// 所持アイテムチェック 火打ち石以外は弾く
-			if (event.getItem() == null || event.getItem().getType() != Material.FLINT_AND_STEEL)
-				return;
-
 			// 権限チェック
+			/*
 			if (!player.hasPermission("sakuraserver.citizen"))
 				return;
+			*/
 
+			// 所持アイテムのチェック
+			if (event.getItem() == null){ return; }
+
+			//*************
 			// 必要条件OK
-			// 周辺のブロックを走査して、特殊な整地用TNTかどうかチェック
+			//*************
 
 			// どの方向に爆発させるか
 			BlockFace direction = null;
+			// どれほどの強さで爆発させるか
+			int strength = 0;
 			// 起爆モード
-			ExplosionMethod method = ExplosionMethod.DIRECTIONAL; // TODO:暫定的に固定
+			ExplosionMethod method = null;
 
-			// 周辺走査
-			if (block.getRelative(BlockFace.UP).getType() == Material.LAPIS_BLOCK)
+			// 所持アイテムにて爆発メソッドを変更させる
+			// 火気アイテム系に関連して爆発メソッドを切り替える
+			Material holding = event.getItem().getType();
+			switch( holding ){
+				case COAL:
+					method = ExplosionMethod.DIRECTIONAL;
+					break;
+				case FLINT_AND_STEEL:
+					method = ExplosionMethod.DIRECTIONAL_WIDE;
+					break;
+				case LAVA_BUCKET:
+					method = ExplosionMethod.DIRECTIONAL_WIDE_EX;
+					break;
+				default:
+					break;
+			}
+
+			// 爆発メソッドが確定しなかった場合はそのまま返す
+			if (method == null){ return; }
+
+			// 周辺のブロックを走査して、特殊な整地用TNTかどうかチェック
+			if ( enhancer.containsKey( block.getRelative(BlockFace.UP).getType() ) ){
 				direction = BlockFace.UP;
-			else if(block.getRelative(BlockFace.DOWN).getType() == Material.LAPIS_BLOCK)
+				strength = enhancer.get( block.getRelative(BlockFace.UP).getType() );
+
+			}else if( enhancer.containsKey( block.getRelative(BlockFace.DOWN).getType() ) ){
 				direction = BlockFace.DOWN;
-			else if(block.getRelative(BlockFace.NORTH).getType() == Material.LAPIS_BLOCK)
+				strength = enhancer.get( block.getRelative(BlockFace.DOWN).getType() );
+
+			}else if( enhancer.containsKey( block.getRelative(BlockFace.NORTH).getType() ) ){
 				direction = BlockFace.NORTH;
-			else if(block.getRelative(BlockFace.EAST).getType() == Material.LAPIS_BLOCK)
+				strength = enhancer.get( block.getRelative(BlockFace.NORTH).getType() );
+
+			}else if( enhancer.containsKey( block.getRelative(BlockFace.EAST).getType() ) ){
 				direction = BlockFace.EAST;
-			else if(block.getRelative(BlockFace.SOUTH).getType() == Material.LAPIS_BLOCK)
+				strength = enhancer.get( block.getRelative(BlockFace.EAST).getType() );
+
+			}else if( enhancer.containsKey( block.getRelative(BlockFace.SOUTH).getType() ) ){
 				direction = BlockFace.SOUTH;
-			else if(block.getRelative(BlockFace.WEST).getType() == Material.LAPIS_BLOCK)
+				strength = enhancer.get( block.getRelative(BlockFace.SOUTH).getType() );
+
+			}else if( enhancer.containsKey( block.getRelative(BlockFace.WEST).getType() ) ){
 				direction = BlockFace.WEST;
+				strength = enhancer.get( block.getRelative(BlockFace.WEST).getType() );
+			}
 
 			// 周辺にダイヤブロックが通常のTNTとして無ければそのまま返す
-			if (direction == null)
-				return;
+			if (direction == null){ return; }
 
 			// 起動済みのTNTをスポーンさせて元のTNTの座標を保存して削除
 			Location loc = block.getLocation();
@@ -112,12 +145,13 @@ public class TNTListener implements Listener{
 			block.setType(Material.AIR);
 
 			// TNTを起動中TNTリストに登録
-			UsefulTNT.primedManager.addPrimedList(player, tntPrimed, loc, method, direction);
+			UsefulTNT.primedManager.addPrimedList(player, tntPrimed, loc, method, direction, strength);
 
 			// 火打ち石を減らす
-			player.setItemInHand(new ItemStack(Material.AIR));
+			//player.setItemInHand( new ItemStack(Material.AIR) );
 
 			Actions.message(null, player, "&cYay! This is a Directional TNT! :3");
+			Actions.message(null, player, "&c**安全確認** 整地TNTが起動しました... 威力: " + strength);
 
 			// イベントキャンセル
 			event.setCancelled(true);
@@ -130,9 +164,11 @@ public class TNTListener implements Listener{
 	 */
 	@EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
 	public void onEntityExplode(EntityExplodeEvent event){
+
 		// TNT以外は弾く
-		if (event.getEntity() == null || !event.getEntityType().equals(EntityType.PRIMED_TNT))
+		if (event.getEntity() == null || !event.getEntityType().equals(EntityType.PRIMED_TNT)){
 			return;
+		}
 
 		// TNTPrimedにキャスト
 		TNTPrimed tntPrimed = (TNTPrimed)event.getEntity();
@@ -150,6 +186,9 @@ public class TNTListener implements Listener{
 				case DIRECTIONAL_WIDE:
 					explode_DIRECTIONAL_WIDE(primedTNT);
 					break;
+				case DIRECTIONAL_WIDE_EX:
+					explode_DIRECTIONAL_WIDE_EX(primedTNT);
+					break;
 				default: // Exception: Undefined ExplosionMethod
 					log.warning(logPrefix+"Error occurred on switching explode method (TNTListener.class)");
 					break;
@@ -159,7 +198,8 @@ public class TNTListener implements Listener{
 
 			// 煙と音を鳴らす
 			Location loc = primedTNT.loc;
-			loc.getWorld().playEffect(loc, Effect.SMOKE, 3);
+			// TNTのエフェクトについては課題
+			loc.getWorld().playEffect(loc, Effect.SMOKE, 4, 2);
 			loc.getWorld().createExplosion(loc, 0.0F, false);
 
 			// 爆発処理後にリストから削除する
@@ -167,10 +207,12 @@ public class TNTListener implements Listener{
 		}
 	}
 
-	// DIRECTIONAL TNT (1x1x16破壊) の爆発処理
+	// DIRECTIONAL TNT (1x1x?破壊) の爆発処理
 	private void explode_DIRECTIONAL(PrimedTNT primedTNT){
 		// 方向取得
 		BlockFace direction = primedTNT.direction;
+		// 威力取得
+		int strength = primedTNT.strength;
 		// プレイヤー取得
 		Player player = primedTNT.player;
 
@@ -178,7 +220,7 @@ public class TNTListener implements Listener{
 		Block block = primedTNT.loc.getBlock();
 		// 16ブロック分を空気に変える
 		// i=0は自身のブロック、i=1は向きを決定するブロックになる
-		A:for (int i = 2; i <= 17; i++){
+		A:for (int i = 2; i <= strength+1; i++){
 			Block check = block.getRelative(direction, i);
 			// 例外ブロック これらは破壊されずスキップされる
 			Material mat = check.getType();
@@ -187,38 +229,24 @@ public class TNTListener implements Listener{
 					continue;
 				case BEDROCK: // 特殊ブロックで遮られた場合は中断
 				case CHEST:
+				case TRAPPED_CHEST:
 				case FURNACE:
-					break A;
+				case BURNING_FURNACE:
+				case HOPPER:
+				case DROPPER:
 				case DISPENSER:
-					return;
+				case BREWING_STAND:
+					break A;
+				default:
+					break;
 			}
-
 
 			// エリア保護チェック
-			if (UsefulTNT.usingWorldGuard){
-				// 建築可否
-				if (!plugin.wgPlugin.canBuild(player, check)){
-					Actions.message(null, player, "&c他人の保護エリアに入っています！");
-					return;
-				}
-
-				// 保護領域取得
-				RegionManager rm = plugin.wgPlugin.getRegionManager(check.getWorld());
-				LocalPlayer localPlayer = plugin.wgPlugin.wrapPlayer(player);
-				ApplicableRegionSet set = rm.getApplicableRegions(toVector(check));
-
-				if (!set.allows(DefaultFlag.TNT, localPlayer)){
-					Actions.message(null, player, "&cTNT使用不可エリアに入っています！");
-					return;
-				}else if (!set.allows(DefaultFlag.LIGHTER, localPlayer)){
-					Actions.message(null, player, "&c火打ち石使用不可エリアに入っています！");
-					return;
-				}
+			if (UsefulTNT.usingWorldGuard ){
+				if( isProtectedBlock( player, check ) ){ return; }
 			}
-
-
 			// 変換前のブロックデータが必要なので先にロギング
-			HawkEyeAPI.addEntry(plugin, new BlockEntry(player, DataType.EXPLOSION, check));
+			//HawkEyeAPI.addEntry(plugin, new BlockEntry(player, DataType.EXPLOSION, check));
 			// カスタムイベントは使わない ロールバック出来ない
 			// HawkEyeAPI.addCustomEntry(plugin, "UsefulTNT", player, check.getLocation(), String.valueOf(mat.getId()));
 
@@ -226,12 +254,236 @@ public class TNTListener implements Listener{
 			check.setType(Material.AIR);
 		}
 		// 通知
-		Actions.permcastMessage("sakuraserver.helper", "&c[通知] &6 "+player.getName()+"&fが&6DIRECTIONAL TNT&fを使用: &6"+Actions.getBlockLocationString(block.getLocation()));
+		notifyModerator( msgPrefix + "&6 "+player.getName()+" &fが整地用TNTを使用しました");
+		notifyModerator( msgPrefix + "&c 種類：&6DIRECTIONAL TNT &c 場所：&6"+Actions.getBlockLocationString(block.getLocation()));
+
 	}
 
-	// DIRECTIONAL_WIDE TNTの爆発処理
+	// DIRECTIONAL_WIDE TNT (3x3x?破壊) の爆発処理
 	private void explode_DIRECTIONAL_WIDE(PrimedTNT primedTNT){
-		// do stuff
+		// 方向取得
+		BlockFace direction = primedTNT.direction;
+		// 威力取得
+		int strength = primedTNT.strength;
+		// プレイヤー取得
+		Player player = primedTNT.player;
+		// 爆発地点のブロックを取得
+		Block block = primedTNT.loc.getBlock();
+
+		// 走査の定義
+		Block origin = null;  //走査始点の定義
+		BlockFace horizonal = null;  //水平走査方向の定義
+		BlockFace vartical= null;   //垂直走査方向の定義
+		switch( direction ){
+			case UP:
+				//北を向いた状態で上を見て、左上(SOUTH_WEST)を始点と定義
+				horizonal = BlockFace.EAST;
+				vartical = BlockFace.NORTH;
+				origin = block.getRelative(BlockFace.SOUTH_WEST, 1);
+				break;
+			case DOWN:
+				//北を向いた状態で下を見て、左上(NORTH_WEST)を始点と定義
+				horizonal = BlockFace.EAST;
+				vartical = BlockFace.SOUTH;
+				origin = block.getRelative(BlockFace.NORTH_WEST, 1);
+				break;
+			case NORTH:
+				horizonal = BlockFace.EAST;
+				vartical = BlockFace.DOWN;
+				origin = block.getRelative(BlockFace.WEST, 1).getRelative(BlockFace.UP, 1+1);
+				break;
+			case EAST:
+				horizonal = BlockFace.SOUTH;
+				vartical = BlockFace.DOWN;
+				origin = block.getRelative(BlockFace.NORTH, 1).getRelative(BlockFace.UP, 1+1);
+				break;
+			case SOUTH:
+				horizonal = BlockFace.WEST;
+				vartical = BlockFace.DOWN;
+				origin = block.getRelative(BlockFace.EAST, 1).getRelative(BlockFace.UP, 1+1);
+				break;
+			case WEST:
+				horizonal = BlockFace.NORTH;
+				vartical = BlockFace.DOWN;
+				origin = block.getRelative(BlockFace.SOUTH, 1).getRelative(BlockFace.UP, 1+1);
+				break;
+			default:
+				break;
+		}
+
+		if( origin == null ){ return; }
+
+		// strengthブロック分を空気に変える
+		// i=0は自身のブロック、i=1は向きを決定するブロックになる
+		for( int h = 0; h < 3; h++){
+			for( int v= 0; v < 3; v++ ){
+				A:for( int d = 2; d <= strength+1; d++){
+					Block check = origin.getRelative( horizonal, h).getRelative(vartical, v).getRelative(direction, d);
+					// 例外ブロック これらは破壊されずスキップされる
+					Material mat = check.getType();
+					switch (mat){
+					case AIR: // 空気の場合はスキップ
+						continue;
+					case BEDROCK: // 特殊ブロックで遮られた場合は中断
+					case CHEST:
+					case TRAPPED_CHEST:
+					case FURNACE:
+					case BURNING_FURNACE:
+					case HOPPER:
+					case DROPPER:
+					case DISPENSER:
+					case BREWING_STAND:
+						break A;
+					default:
+						break;
+					}
+
+					// エリア保護チェック
+					if (UsefulTNT.usingWorldGuard ){
+						if( isProtectedBlock( player, check ) ){ return; }
+					}
+					// 変換前のブロックデータが必要なので先にロギング
+					//HawkEyeAPI.addEntry(plugin, new BlockEntry(player, DataType.EXPLOSION, check));
+					// カスタムイベントは使わない ロールバック出来ない
+					// HawkEyeAPI.addCustomEntry(plugin, "UsefulTNT", player, check.getLocation(), String.valueOf(mat.getId()));
+
+					// 変換
+					check.setType(Material.AIR);
+				}
+			}
+		}
+		// 通知
+		notifyModerator( msgPrefix + "&6 "+player.getName()+" &fが整地用TNTを使用しました");
+		notifyModerator( msgPrefix + "&c 種類：&6DIRECTIONAL WIDE TNT &c 場所：&6"+Actions.getBlockLocationString(block.getLocation()));
+
+	}
+
+	// DIRECTIONAL_WIDE_EX TNT (5x5x?破壊) の爆発処理
+	private void explode_DIRECTIONAL_WIDE_EX(PrimedTNT primedTNT){
+		// 方向取得
+		BlockFace direction = primedTNT.direction;
+		// 威力取得
+		int strength = primedTNT.strength;
+		// プレイヤー取得
+		Player player = primedTNT.player;
+		// 爆発地点のブロックを取得
+		Block block = primedTNT.loc.getBlock();
+
+		// 走査の定義
+		Block origin = null;  //走査始点の定義
+		BlockFace horizonal = null;  //水平走査方向の定義
+		BlockFace vartical= null;   //垂直走査方向の定義
+		switch( direction ){
+			case UP:
+				//北を向いた状態で上を見て、左上(SOUTH_WEST)を始点と定義
+				horizonal = BlockFace.EAST;
+				vartical = BlockFace.NORTH;
+				origin = block.getRelative(BlockFace.SOUTH_WEST, 2);
+				break;
+			case DOWN:
+				//北を向いた状態で下を見て、左上(NORTH_WEST)を始点と定義
+				horizonal = BlockFace.EAST;
+				vartical = BlockFace.SOUTH;
+				origin = block.getRelative(BlockFace.NORTH_WEST, 2);
+				break;
+			case NORTH:
+				horizonal = BlockFace.EAST;
+				vartical = BlockFace.DOWN;
+				origin = block.getRelative(BlockFace.WEST, 2).getRelative(BlockFace.UP, 2+2);
+				break;
+			case EAST:
+				horizonal = BlockFace.SOUTH;
+				vartical = BlockFace.DOWN;
+				origin = block.getRelative(BlockFace.NORTH, 2).getRelative(BlockFace.UP, 2+2);
+				break;
+			case SOUTH:
+				horizonal = BlockFace.WEST;
+				vartical = BlockFace.DOWN;
+				origin = block.getRelative(BlockFace.EAST, 2).getRelative(BlockFace.UP, 2+2);
+				break;
+			case WEST:
+				horizonal = BlockFace.NORTH;
+				vartical = BlockFace.DOWN;
+				origin = block.getRelative(BlockFace.SOUTH, 2).getRelative(BlockFace.UP, 2+2);
+				break;
+			default:
+				break;
+		}
+
+		if( origin == null ){ return; }
+
+		// strengthブロック分を空気に変える
+		// i=0は自身のブロック、i=1は向きを決定するブロックになる
+		for( int h = 0; h < 5; h++){
+			for( int v= 0; v < 5; v++ ){
+				A:for( int d = 2; d <= strength+1; d++){
+					Block check = origin.getRelative( horizonal, h).getRelative(vartical, v).getRelative(direction, d);
+					// 例外ブロック これらは破壊されずスキップされる
+					Material mat = check.getType();
+					switch (mat){
+					case AIR: // 空気の場合はスキップ
+						continue;
+					case BEDROCK: // 特殊ブロックで遮られた場合は中断
+					case CHEST:
+					case TRAPPED_CHEST:
+					case FURNACE:
+					case BURNING_FURNACE:
+					case HOPPER:
+					case DROPPER:
+					case DISPENSER:
+					case BREWING_STAND:
+						break A;
+					default:
+						break;
+					}
+
+					// エリア保護チェック
+					if (UsefulTNT.usingWorldGuard ){
+						if( isProtectedBlock( player, check ) ){ return; }
+					}
+					// 変換前のブロックデータが必要なので先にロギング
+					//HawkEyeAPI.addEntry(plugin, new BlockEntry(player, DataType.EXPLOSION, check));
+					// カスタムイベントは使わない ロールバック出来ない
+					// HawkEyeAPI.addCustomEntry(plugin, "UsefulTNT", player, check.getLocation(), String.valueOf(mat.getId()));
+
+					// 変換
+					check.setType(Material.AIR);
+				}
+			}
+		}
+		// 通知
+		notifyModerator( msgPrefix + "&6 "+player.getName()+" &fが整地用TNTを使用しました");
+		notifyModerator( msgPrefix + "&c 種類：&6DIRECTIONAL WIDE EX TNT &c 場所：&6"+Actions.getBlockLocationString(block.getLocation()));
+	}
+
+	// 例外ブロックのチェックを行う
+	// do stuff
+
+	// WorldGuardによる地形保護確認
+	boolean isProtectedBlock(Player player,Block check){
+		// 建築可否
+		if (!plugin.wgPlugin.canBuild( player, check)){
+			Actions.message(null, player, "&c他人の保護エリアに入っています！");
+			return true;
+		}
+		// 保護領域取得
+		RegionManager rm = plugin.wgPlugin.getRegionManager(check.getWorld());
+		LocalPlayer localPlayer = plugin.wgPlugin.wrapPlayer(player);
+		ApplicableRegionSet set = rm.getApplicableRegions(toVector(check));
+
+		if (!set.allows(DefaultFlag.TNT, localPlayer)){
+			Actions.message(null, player, "&cTNT使用不可エリアに入っています！");
+			return true;
+		}else if (!set.allows(DefaultFlag.LIGHTER, localPlayer)){
+			Actions.message(null, player, "&c火打ち石使用不可エリアに入っています！");
+			return true;
+		}
+		return false;
+	}
+
+	// 権限別の使用通知(要修正)
+	void notifyModerator(String message){
+		Actions.permcastMessage( "usefultnt.admin", message);
 	}
 }
 

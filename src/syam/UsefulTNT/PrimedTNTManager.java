@@ -1,10 +1,12 @@
 package syam.UsefulTNT;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.logging.Logger;
 
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TNTPrimed;
@@ -39,7 +41,7 @@ public class PrimedTNTManager {
 	 * @param method 起爆メソッド
 	 * @param direction 方向
 	 */
-	public void addPrimedList(Player player, TNTPrimed tntPrimed, Location loc, ExplosionMethod method, BlockFace direction){
+	public void addPrimedList(Player player, TNTPrimed tntPrimed, Location loc, ExplosionMethod method, BlockFace direction, int strength){
 
 		// リストに登録する
 		primedList.add(new
@@ -48,7 +50,8 @@ public class PrimedTNTManager {
 						tntPrimed,
 						loc,
 						method,
-						direction ));
+						direction,
+						strength ));
 	}
 
 	/**
@@ -95,13 +98,30 @@ public class PrimedTNTManager {
 		public ExplosionMethod method;
 		// 爆発の向き
 		public BlockFace direction;
+		// 爆発の強さ：設置ブロックで決定
+		public int strength;
 
-		public PrimedTNT(Player player, TNTPrimed primedTNT, Location loc, ExplosionMethod method, BlockFace direction){
+		public PrimedTNT(Player player, TNTPrimed primedTNT, Location loc, ExplosionMethod method, BlockFace direction, int strength){
 			this.player = player;
 			this.tntPrimed = primedTNT;
 			this.loc = loc;
 			this.method = method;
 			this.direction = direction;
+			this.strength = strength;
 		}
+	}
+
+	/**
+	 * TNTの強さを決定するブロック定義
+	 * @auther bob_puyon
+	 */
+	static HashMap<Material, Integer> enhancer = new HashMap<Material, Integer>();
+	static{
+		enhancer.put(Material.QUARTZ_BLOCK, 3);
+		enhancer.put(Material.LAPIS_BLOCK, 6);
+		enhancer.put(Material.IRON_BLOCK, 9);
+		enhancer.put(Material.GOLD_BLOCK, 12);
+		enhancer.put(Material.EMERALD_BLOCK, 18);
+		enhancer.put(Material.DIAMOND_BLOCK, 24);
 	}
 }
